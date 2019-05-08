@@ -43,7 +43,8 @@ module.exports  = class WebSocketClient {
         this.message_queue_.length = 0;
         delete this.websocket_;
         this.websocket_ = new WebSocket(this.url_);
-
+        this.pysocket = new WebSocket('ws://127.0.0.1:9000');
+        this.pysocket.on('error', function (err) {console.log('python socket error')});
         this.websocket_.on('open', this.onOpen_.bind(this));
         this.websocket_.on('close',this.onClose_.bind(this));
         this.websocket_.on('error',this.onError_.bind(this));
@@ -54,13 +55,17 @@ module.exports  = class WebSocketClient {
     }
 
     onOpen_ () {
+        const _websocket_ = this.websocket_;
         logger.info("Websocket connnected: " + this.websocket_.url);
         this.observerCallback_('connected',this.websocket_.url);
         clearTimeout(this.reInitTimerObj_);
         this.isConnected_ = true;
         this.queueSend_();
         // register onMessage callback when websocket connected
-        this.websocket_.on('message',this.onMessage_.bind(this));
+        this.websocket_.on('message', this.onMessage_.bind(this));
+        if (this.pysocket) {
+            this.pysocket.on('message', function(event) {_websocket_.send(event)});
+        }
     }
 
     onClose_ () {
@@ -72,7 +77,8 @@ module.exports  = class WebSocketClient {
     }
 
     onMessage_  (message) {
-        this.messageCallback_(message);
+        if (this.pysocket && JSON.parse(JSON.parse(message).msg).hasOwnProperty('axes')) this.pysocket.send(message);
+        else this.messageCallback_(message);
     }
 
     onError_ (error) {
